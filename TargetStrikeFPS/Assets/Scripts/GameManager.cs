@@ -7,10 +7,14 @@ public class GameManager : MonoBehaviour
 
     [Header("References")]
     public PlayerController playerController;
-    public GunController gunController;
+    public WeaponController weaponController;
+    public WaveManager waveManager;
 
     public bool IsGameRunning { get; private set; }
     public bool IsPaused { get; private set; }
+    private float _startTime;
+    public float TimeSurvived => IsGameRunning ? Time.time - _startTime : _endTime - _startTime;
+    private float _endTime;
 
     void Awake()
     {
@@ -22,10 +26,10 @@ public class GameManager : MonoBehaviour
 
     void Update()
     {
-        if (Input.GetKeyDown(KeyCode.Escape) && IsGameRunning)
+        if (!IsGameRunning) return;
+        if (Input.GetKeyDown(KeyCode.Escape))
         {
-            if (IsPaused) ResumeGame();
-            else PauseGame();
+            if (IsPaused) ResumeGame(); else PauseGame();
         }
     }
 
@@ -33,34 +37,37 @@ public class GameManager : MonoBehaviour
     {
         IsGameRunning = true;
         IsPaused = false;
+        _startTime = Time.time;
         Time.timeScale = 1f;
-        ScoreManager.Instance.ResetStats();
-        TimerManager.Instance.StartTimer();
+        ScoreManager.Instance.Reset();
+        FindObjectOfType<HealthSystem>()?.ResetStats();
         playerController?.SetControlsEnabled(true);
-        gunController?.SetCanShoot(true);
+        weaponController?.SetCanShoot(true);
+        waveManager?.StartWaves();
         UIManager.Instance?.ShowHUD();
     }
 
     public void EndGame()
     {
         IsGameRunning = false;
+        _endTime = Time.time;
         playerController?.SetControlsEnabled(false);
-        gunController?.SetCanShoot(false);
+        weaponController?.SetCanShoot(false);
         ScoreManager.Instance.SaveHighScore();
-        TimerManager.Instance.StopTimer();
-        UIManager.Instance?.ShowGameOverScreen(
+        UIManager.Instance?.ShowGameOver(
             ScoreManager.Instance.Score,
-            ScoreManager.Instance.Hits,
+            ScoreManager.Instance.Kills,
+            ScoreManager.Instance.Headshots,
             ScoreManager.Instance.Accuracy,
+            WaveManager.Instance?.CurrentWave ?? 1,
+            Mathf.FloorToInt(TimeSurvived),
             ScoreManager.Instance.HighScore);
-        AudioManager.Instance?.StopMusic();
     }
 
     public void PauseGame()
     {
         IsPaused = true;
         Time.timeScale = 0f;
-        TimerManager.Instance.PauseTimer();
         playerController?.SetControlsEnabled(false);
         UIManager.Instance?.ShowPauseMenu();
     }
@@ -69,7 +76,6 @@ public class GameManager : MonoBehaviour
     {
         IsPaused = false;
         Time.timeScale = 1f;
-        TimerManager.Instance.ResumeTimer();
         playerController?.SetControlsEnabled(true);
         UIManager.Instance?.HidePauseMenu();
     }
@@ -78,6 +84,12 @@ public class GameManager : MonoBehaviour
     {
         Time.timeScale = 1f;
         SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+    }
+
+    public void QuitToMenu()
+    {
+        Time.timeScale = 1f;
+        SceneManager.LoadScene(0);
     }
 
     public void QuitGame()
